@@ -13,6 +13,8 @@ The project uses the Cloudflare Workers KV store to cache the pages to reduce th
 
 Note: To use this with an iOS device, you must enable Link Prefetch. Go to Settings > Safari > Advanced > Feature Flags > LinkPrefetch (turn on)
 
-FAQ:
+---
+
+**FAQ:**
 
 * Can you prefetch links on the page? No, these have several other assets required to display these pages, and the 'prerender' option that accomplishes this is [deprecated](https://developer.mozilla.org/en-US/docs/Web/HTML/Attributes/rel/prerender).
