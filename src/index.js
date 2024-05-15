@@ -1,18 +1,4 @@
-// Are you ever on the subway with intermittent internet and you want to read hacker news?
-// Bored in between stations and want to get up to date on the latest discussions?
-// This is the project for you!
-
-// This is a project that will prefetch all links on the Hacker News homepage.
-// It is a proxy to the official hacker news site, but with the added benefit of prefetching all links on the homepage.
-
-// This project uses Cloudflare Workers to intercept requests to the Hacker News homepage and prefetch all links on the page.
-// This means that when you click on a link, the page will load instantly, even if you are in a subway with no internet connection.
-
-// The project uses the Cloudflare Workers KV store to cache the pages and serve them as well to reduce the load on Hacker News.
-
-//This is a proxy for Hacker News which will prefetch all links on the homepage
 export default {
-
 	//this is the worker that will run on every request and fetch the hacker news page assets
 	//it will pull these assets from KV if they exist
 	//if they don't exist, it will fetch the assets from the hacker news page
