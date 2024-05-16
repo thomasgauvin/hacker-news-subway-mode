@@ -121,6 +121,7 @@ async function fetchFromOriginAndStoreInKV(env, url, request) {
 
 	//store the response in KV
 	await env.hnSubwayModeKV.put(url.toString(), bodyStream, {
+		expirationTtl: 432000,
 		metadata: {
 			timestamp: Date.now(),
 			options: {
