@@ -19,7 +19,38 @@ export default {
 
 		return response;
 	},
+
+	async queue(batch, env) {
+		console.log(`consumed from our queue: ${JSON.stringify(batch.messages)}`);
+
+		//iterate over the messages, and fetch the page from the origin and then store it in KV
+		for (let message of batch.messages) {
+			const body = message.body;
+			const url = new URL(body.url);
+			url.port = '';
+			url.hostname = 'news.ycombinator.com';
+			url.protocol = 'https';
+
+			console.log('Refreshing ' + url.toString() + ' from the origin');
+
+			await fetchFromOriginAndStoreInKV(env, url, {});
+
+			console.log("Waiting for 1 second to avoid rate limiting");
+			//hand for 1 second to avoid rate limiting
+			await hangFor(1000);
+		}
+	},
 };
+
+function hangFor(delayTime) {
+	return new Promise((resolve) => {
+		setTimeout(() => {
+			console.log(`Execution resumed after ${delayTime} milliseconds`);
+			resolve(); // Resolve the Promise after the specified delay time
+		}, delayTime); // Use the provided delayTime
+	});
+}
+
 
 function isHomePage(url){
 	return url.toString() === 'https://news.ycombinator.com' || url.toString() === 'https://news.ycombinator.com/' || url.toString() === 'https://news.ycombinator.com/news';
@@ -27,12 +58,12 @@ function isHomePage(url){
 
 function addPageTitleToHomePage(url, response) {
 	if (isHomePage(url)) {
-		//use HTMLRewriter to add (subway mode) to the <a href="news">Hacker News</a>
+		//use HTMLRewriter to add (Subway mode) to the <a href="news">Hacker News</a>
 		return new HTMLRewriter()
 			.on('a', {
 				element(el) {
 					if (el.getAttribute('href') === 'news') {
-						el.append(' (subway mode)');
+						el.append(' (Subway mode)');
 					}
 				},
 			})
@@ -59,9 +90,23 @@ function addPrefetchLinksScriptToHomePage(url, response) {
 }
 
 async function returnFromKVOrFetchFromOrigin(env, url, request) {
-	let response = await returnFromKV(env, url);
-	if (!response){
+	let {
+		response,
+		metadata
+	} = await returnFromKV(env, url);
+	if (!response)	{
 		response = await fetchFromOriginAndStoreInKV(env, url, request);
+	}
+	//if the kv response is more than 5 minutes old, add it to the queue to be refreshed
+	if ((metadata && metadata.timestamp < Date.now() - 5 * 60 * 1000) || (response.status >= 500)) {
+		//write to the queue to refresh the page
+		console.log(JSON.stringify(request))
+		await env.refreshTasksQueue.send({
+			url: url.toString()
+		})
+		console.log(metadata.timestamp)
+		console.log(Date.now() - 5 * 60 * 1000)
+		console.log('Added ' + url.toString() + ' to the refresh queue.');
 	}
 
 	return response;
@@ -69,6 +114,8 @@ async function returnFromKVOrFetchFromOrigin(env, url, request) {
 
 async function fetchFromOriginAndStoreInKV(env, url, request) {
 	const response = await fetch(url.toString(), request);
+
+	console.log('Obtained response from origin for ' + url.toString());
 
 	const bodyStream = response.clone().body;
 
@@ -97,7 +144,7 @@ async function returnFromKV(env, url) {
 	
 	try{
 		let kvObj = await env.hnSubwayModeKV.getWithMetadata(url.toString());
-		if (kvObj && kvObj.metadata && kvObj.metadata.options && kvObj.metadata.timestamp > Date.now() - 5 * 60 * 1000) {
+		if (kvObj && kvObj.value && kvObj.metadata){
 			console.log('Obtained response from KV for ' + url.toString());
 
 			const response = new Response(kvObj.value, {
@@ -109,7 +156,10 @@ async function returnFromKV(env, url) {
 				}),
 			});
 
-			return response;
+			return {
+				response: response, 
+				metadata: kvObj.metadata
+			};
 		}
 
 		if (kvObj && kvObj.metadata && kvObj.metadata.timestamp < Date.now() - 5 * 60 * 1000) {
@@ -123,7 +173,10 @@ async function returnFromKV(env, url) {
 		console.log(e);
 	}
 
-	return null;
+	return {
+		response: null,
+		metadata: null
+	};
 }
 
 function returnAddPrefetchLinksScript(){
